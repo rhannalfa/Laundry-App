@@ -228,7 +228,7 @@ export default function PosCreate({ auth, services }) {
                                 {/* --- TOMBOL PILIHAN PEMBAYARAN LANGSUNG --- */}
                                 <div className="py-2">
                                     <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Pilih Bayar & Proses</label>
-                                    <div className="grid grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-2 gap-2">
 
                                         {/* Tombol 1: Tunai */}
                                         <button
