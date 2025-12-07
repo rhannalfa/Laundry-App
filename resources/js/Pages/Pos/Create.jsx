@@ -249,15 +249,6 @@ export default function PosCreate({ auth, services }) {
                                             <span className="text-xl">💳</span>
                                             QRIS / E-Wallet
                                         </button>
-
-                                        {/* Tombol 3: Nanti */}
-                                        <button
-                                            onClick={() => handlePayment('later')}
-                                            className="cursor-pointer bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 text-yellow-700 rounded-xl p-2 text-center text-xs font-bold transition flex flex-col items-center justify-center gap-1 h-20 active:scale-95 shadow-sm"
-                                        >
-                                            <span className="text-xl">⏳</span>
-                                            Bayar Nanti
-                                        </button>
                                     </div>
                                     {/* Indikator Loading */}
                                     {processing && <p className="text-center text-xs text-gray-400 mt-2 animate-pulse">Sedang memproses transaksi...</p>}

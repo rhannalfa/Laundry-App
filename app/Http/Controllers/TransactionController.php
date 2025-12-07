@@ -34,7 +34,7 @@ public function store(Request $request)
             'items' => 'required|array|min:1',
             'items.*.id' => 'required|exists:services,id',
             'items.*.qty' => 'required|numeric|min:1',
-            'payment_choice' => 'required|in:cash,cashless,later'
+            'payment_choice' => 'required|in:cash,cashless'
         ]);
 
         try {
