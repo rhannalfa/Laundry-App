@@ -1,20 +1,21 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm, router } from '@inertiajs/react'; // <-- Jangan lupa import router
+import { Head, useForm, router } from '@inertiajs/react'; // Pastikan import router ada
 import { useState } from 'react';
 
 export default function PosCreate({ auth, services }) {
     const [cart, setCart] = useState([]);
 
-    // Kita tidak pakai 'payment_choice' di default data lagi karena dikirim langsung via parameter fungsi
+    // Kita tidak perlu menyimpan payment_choice di useForm state lagi
+    // karena akan dikirim langsung sebagai argumen fungsi
     const { data, setData, post, processing, errors, reset } = useForm({
         customer_name: '',
         customer_phone: '',
         rack_location: '',
         items: [],
-        payment_choice: ''
+        // payment_choice dihapus dari sini, dikirim manual nanti
     });
 
-    // --- Logic cart ---
+    // --- Logic cart (Tetap sama) ---
     const addToCart = (service) => {
         const existingItem = cart.find(item => item.id === service.id);
         if (existingItem) {
@@ -36,10 +37,11 @@ export default function PosCreate({ auth, services }) {
 
     const grandTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
-    // --- FUNGSI PEMBAYARAN LANGSUNG (TANPA FORM SUBMIT BIASA) ---
+    // --- FUNGSI SUBMIT LANGSUNG ---
+    // Fungsi ini dipanggil saat tombol pembayaran diklik
     const handlePayment = (choice) => {
 
-        // Validasi Frontend
+        // 1. Validasi Frontend
         if (cart.length === 0) {
             alert("Keranjang masih kosong!");
             return;
@@ -49,48 +51,69 @@ export default function PosCreate({ auth, services }) {
             return;
         }
 
-        // Siapkan Payload Data Manual
+        // 2. Siapkan Data yang akan dikirim
+        // Kita gabungkan data dari form (nama, hp) dan data dari cart
         const submitData = {
-            ...data, // Ambil data form (nama, hp, rak)
+            ...data, // data form (nama, hp, rak)
             items: cart.map(item => ({ id: item.id, qty: item.qty })),
-            payment_choice: choice // Set pilihan pembayaran
+            payment_choice: choice // Pilihan pembayaran yang diklik
         };
 
-        // PERBAIKAN: Gunakan 'router.post' bukan 'post' bawaan useForm
-        // Format: router.post(url, data, options)
+        // 3. Kirim ke Backend menggunakan router.post (bukan post dari useForm)
+        // router.post lebih fleksibel untuk mengirim data custom
         router.post(route('pos.store'), submitData, {
             onSuccess: (page) => {
                 const flash = page.props.flash || {};
                 const successData = flash.success || {};
 
-                if (typeof successData === 'string') {
-                    alert(successData); setCart([]); reset(); return;
+                // Cek jika response sukses
+                if (!successData || typeof successData === 'string') {
+                     // Fallback jika backend kirim string biasa
+                    if(successData) alert(successData);
+                    setCart([]);
+                    reset();
+                    return;
                 }
 
                 const paymentChoice = successData.payment_choice;
                 const snapToken = successData.snap_token;
 
-                // 1. Jika Cashless
+                // --- LOGIKA SETELAH SUKSES ---
+
+                // 1. Jika Cashless -> LANGSUNG MUNCULKAN POPUP MIDTRANS
                 if (paymentChoice === 'cashless' && snapToken) {
                     window.snap.pay(snapToken, {
-                        onSuccess: function(result){ alert("Pembayaran Berhasil!"); setCart([]); reset(); window.location.reload(); },
-                        onPending: function(result){ alert("Menunggu pembayaran..."); setCart([]); reset(); },
-                        onError: function(result){ alert("Pembayaran gagal!"); },
-                        onClose: function(){ alert('Anda menutup popup tanpa menyelesaikan pembayaran'); }
+                        onSuccess: function(result){
+                            alert("Pembayaran Berhasil!");
+                            router.visit(route('transactions.index')); // Redirect ke Riwayat
+                        },
+                        onPending: function(result){
+                            alert("Menunggu pembayaran...");
+                            router.visit(route('transactions.index')); // Redirect ke Riwayat
+                        },
+                        onError: function(result){
+                            alert("Pembayaran gagal!");
+                        },
+                        onClose: function(){
+                            if(confirm("Anda menutup popup. Lanjutkan ke riwayat transaksi?")) {
+                                router.visit(route('transactions.index'));
+                            }
+                        }
                     });
                 }
                 // 2. Jika Tunai
                 else if (paymentChoice === 'cash') {
                     alert('✅ Transaksi BERHASIL! \nPembayaran TUNAI diterima.');
-                    setCart([]); reset();
+                    router.visit(route('transactions.index'));
                 }
                 // 3. Jika Nanti
                 else {
                     alert('📦 Transaksi Disimpan (Belum Bayar).');
-                    setCart([]); reset();
+                    router.visit(route('transactions.index'));
                 }
             },
             onError: (errors) => {
+                // Tampilkan error validasi pertama jika ada
                 const firstError = Object.values(errors)[0];
                 alert("Gagal Menyimpan: " + firstError);
             }
@@ -133,7 +156,7 @@ export default function PosCreate({ auth, services }) {
                     </div>
                 </div>
 
-                {/* KANAN: KERANJANG & INPUT */}
+                {/* KANAN: KERANJANG (STICKY) */}
                 <div className="w-full lg:w-1/3">
                     <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 sticky top-6">
                         <div className="flex items-center justify-between border-b border-dashed border-gray-200 pb-4 mb-4">
@@ -165,80 +188,80 @@ export default function PosCreate({ auth, services }) {
                             </div>
                         )}
 
-                        {/* Total */}
-                        <div className="border-t border-gray-100 pt-4 mb-4">
+                        {/* Total & Form */}
+                        <div className="border-t border-gray-100 pt-4 space-y-4">
                             <div className="flex justify-between items-end">
                                 <span className="text-gray-500 font-medium">Total Tagihan</span>
                                 <span className="text-2xl font-extrabold text-gray-800">Rp {grandTotal.toLocaleString('id-ID')}</span>
                             </div>
-                        </div>
 
-                        {/* INPUT PELANGGAN (TANPA FORM TAG) */}
-                        <div className="space-y-3">
-                            <div>
-                                <input
-                                    type="text"
-                                    className="w-full bg-gray-50 border-gray-200 rounded-lg text-sm focus:ring-brand-500 focus:border-brand-500 transition-colors"
-                                    value={data.customer_name}
-                                    onChange={e => setData('customer_name', e.target.value)}
-                                    placeholder="Nama Pelanggan (Wajib)"
-                                />
-                                {errors.customer_name && <div className="text-red-500 text-xs mt-1">{errors.customer_name}</div>}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
-                                <input
-                                    type="text"
-                                    className="w-full bg-gray-50 border-gray-200 rounded-lg text-sm focus:ring-brand-500 focus:border-brand-500"
-                                    value={data.customer_phone}
-                                    onChange={e => setData('customer_phone', e.target.value)}
-                                    placeholder="No. WA (Opsional)"
-                                />
-                                <input
-                                    type="text"
-                                    className="w-full bg-gray-50 border-gray-200 rounded-lg text-sm focus:ring-brand-500 focus:border-brand-500"
-                                    value={data.rack_location}
-                                    onChange={e => setData('rack_location', e.target.value)}
-                                    placeholder="Rak (Contoh: A1)"
-                                />
-                            </div>
-
-                            {/* TOMBOL PILIHAN PEMBAYARAN (LANGSUNG PROSES) */}
-                            <div className="py-2">
-                                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Pilih Bayar & Proses</label>
-                                <div className="grid grid-cols-3 gap-2">
-
-                                    {/* Tombol 1: Tunai */}
-                                    <button
-                                        onClick={() => handlePayment('cash')}
-                                        disabled={processing}
-                                        className="cursor-pointer bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-700 rounded-xl p-2 text-center text-xs font-bold transition flex flex-col items-center justify-center gap-1 h-20 active:scale-95 shadow-sm"
-                                    >
-                                        <span className="text-xl">💵</span>
-                                        Tunai
-                                    </button>
-
-                                    {/* Tombol 2: Cashless (Midtrans) */}
-                                    <button
-                                        onClick={() => handlePayment('cashless')}
-                                        disabled={processing}
-                                        className="cursor-pointer bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl p-2 text-center text-xs font-bold transition flex flex-col items-center justify-center gap-1 h-20 active:scale-95 shadow-sm"
-                                    >
-                                        <span className="text-xl">💳</span>
-                                        QRIS / E-Wallet
-                                    </button>
-
-                                    {/* Tombol 3: Nanti */}
-                                    <button
-                                        onClick={() => handlePayment('later')}
-                                        disabled={processing}
-                                        className="cursor-pointer bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 text-yellow-700 rounded-xl p-2 text-center text-xs font-bold transition flex flex-col items-center justify-center gap-1 h-20 active:scale-95 shadow-sm"
-                                    >
-                                        <span className="text-xl">⏳</span>
-                                        Bayar Nanti
-                                    </button>
+                            {/* Form Input Pelanggan (Tanpa tag <form>) */}
+                            <div className="space-y-3">
+                                <div>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-gray-50 border-gray-200 rounded-lg text-sm focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                                        value={data.customer_name}
+                                        onChange={e => setData('customer_name', e.target.value)}
+                                        placeholder="Nama Pelanggan (Wajib)"
+                                    />
+                                    {/* Error handling */}
                                 </div>
-                                {processing && <p className="text-center text-xs text-gray-400 mt-2">Sedang memproses transaksi...</p>}
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="text"
+                                        className="w-full bg-gray-50 border-gray-200 rounded-lg text-sm focus:ring-brand-500 focus:border-brand-500"
+                                        value={data.customer_phone}
+                                        onChange={e => setData('customer_phone', e.target.value)}
+                                        placeholder="No. WA (Opsional)"
+                                    />
+                                    <input
+                                        type="text"
+                                        className="w-full bg-gray-50 border-gray-200 rounded-lg text-sm focus:ring-brand-500 focus:border-brand-500"
+                                        value={data.rack_location}
+                                        onChange={e => setData('rack_location', e.target.value)}
+                                        placeholder="Rak (Contoh: A1)"
+                                    />
+                                </div>
+
+                                {/* --- TOMBOL PILIHAN PEMBAYARAN LANGSUNG --- */}
+                                <div className="py-2">
+                                    <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Pilih Bayar & Proses</label>
+                                    <div className="grid grid-cols-3 gap-2">
+
+                                        {/* Tombol 1: Tunai */}
+                                        <button
+                                            onClick={() => handlePayment('cash')}
+                                            // Jangan disable saat processing agar user tau tombolnya diklik,
+                                            // tapi logic handlePayment bisa ditambah pencegah double click jika mau.
+                                            className="cursor-pointer bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-700 rounded-xl p-2 text-center text-xs font-bold transition flex flex-col items-center justify-center gap-1 h-20 active:scale-95 shadow-sm"
+                                        >
+                                            <span className="text-xl">💵</span>
+                                            Tunai
+                                        </button>
+
+                                        {/* Tombol 2: Cashless (Midtrans) - KLIK LANGSUNG POPUP */}
+                                        <button
+                                            onClick={() => handlePayment('cashless')}
+                                            className="cursor-pointer bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl p-2 text-center text-xs font-bold transition flex flex-col items-center justify-center gap-1 h-20 active:scale-95 shadow-sm"
+                                        >
+                                            <span className="text-xl">💳</span>
+                                            QRIS / E-Wallet
+                                        </button>
+
+                                        {/* Tombol 3: Nanti */}
+                                        <button
+                                            onClick={() => handlePayment('later')}
+                                            className="cursor-pointer bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 text-yellow-700 rounded-xl p-2 text-center text-xs font-bold transition flex flex-col items-center justify-center gap-1 h-20 active:scale-95 shadow-sm"
+                                        >
+                                            <span className="text-xl">⏳</span>
+                                            Bayar Nanti
+                                        </button>
+                                    </div>
+                                    {/* Indikator Loading */}
+                                    {processing && <p className="text-center text-xs text-gray-400 mt-2 animate-pulse">Sedang memproses transaksi...</p>}
+                                </div>
                             </div>
                         </div>
                     </div>
