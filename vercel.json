@@ -6,6 +6,26 @@
     },
     "routes": [
         {
+            "src": "/build/(.*)",
+            "dest": "/public/build/$1"
+        },
+        {
+            "src": "/images/(.*)",
+            "dest": "/public/images/$1"
+        },
+        {
+            "src": "/favicon.ico",
+            "dest": "/public/favicon.ico"
+        },
+        {
+            "src": "/manifest.json",
+            "dest": "/public/manifest.json"
+        },
+        {
+            "src": "/sw.js",
+            "dest": "/public/sw.js"
+        },
+        {
             "src": "/(.*)",
             "dest": "/api/index.php"
         }
