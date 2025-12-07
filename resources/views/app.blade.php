@@ -14,7 +14,19 @@
             src="https://app.sandbox.midtrans.com/snap/snap.js"
             data-client-key="{{ config('services.midtrans.client_key') }}">
         </script>
-        
+
+        <link rel="manifest" href="/manifest.json">
+        <meta name="theme-color" content="#14b8a6">
+        <link rel="apple-touch-icon" href="/images/icon-192.png">
+
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js');
+                });
+            }
+        </script>
+
         <!-- Scripts -->
         @routes
         @viteReactRefresh
