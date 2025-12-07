@@ -39,7 +39,7 @@ export default function PosCreate({ auth, services }) {
     // --- FUNGSI PEMBAYARAN LANGSUNG (TANPA FORM SUBMIT BIASA) ---
     const handlePayment = (choice) => {
 
-        // Validasi Frontend Sederhana
+        // Validasi Frontend
         if (cart.length === 0) {
             alert("Keranjang masih kosong!");
             return;
@@ -50,16 +50,15 @@ export default function PosCreate({ auth, services }) {
         }
 
         // Siapkan Payload Data Manual
-        // Kita gabungkan data form + data cart + pilihan pembayaran
-        const payload = {
-            ...data,
+        const submitData = {
+            ...data, // Ambil data form (nama, hp, rak)
             items: cart.map(item => ({ id: item.id, qty: item.qty })),
-            payment_choice: choice
+            payment_choice: choice // Set pilihan pembayaran
         };
 
-        // Kirim ke Backend
-        post(route('pos.store'), {
-            data: payload, // Override data useForm dengan payload lengkap
+        // PERBAIKAN: Gunakan 'router.post' bukan 'post' bawaan useForm
+        // Format: router.post(url, data, options)
+        router.post(route('pos.store'), submitData, {
             onSuccess: (page) => {
                 const flash = page.props.flash || {};
                 const successData = flash.success || {};
@@ -71,41 +70,24 @@ export default function PosCreate({ auth, services }) {
                 const paymentChoice = successData.payment_choice;
                 const snapToken = successData.snap_token;
 
-                // 1. KASUS CASHLESS (MIDTRANS)
+                // 1. Jika Cashless
                 if (paymentChoice === 'cashless' && snapToken) {
                     window.snap.pay(snapToken, {
-                        onSuccess: function(result){
-                            alert("Pembayaran Berhasil!");
-                            // Redirect ke Riwayat
-                            router.visit(route('transactions.index'));
-                        },
-                        onPending: function(result){
-                            alert("Menunggu pembayaran...");
-                            // Redirect ke Riwayat (biar bisa bayar nanti)
-                            router.visit(route('transactions.index'));
-                        },
-                        onError: function(result){
-                            alert("Pembayaran gagal!");
-                        },
-                        onClose: function(){
-                            // Jika ditutup, lempar ke riwayat juga
-                            if(confirm("Anda menutup popup. Lanjutkan ke riwayat transaksi?")) {
-                                router.visit(route('transactions.index'));
-                            }
-                        }
+                        onSuccess: function(result){ alert("Pembayaran Berhasil!"); setCart([]); reset(); window.location.reload(); },
+                        onPending: function(result){ alert("Menunggu pembayaran..."); setCart([]); reset(); },
+                        onError: function(result){ alert("Pembayaran gagal!"); },
+                        onClose: function(){ alert('Anda menutup popup tanpa menyelesaikan pembayaran'); }
                     });
                 }
-
-                // 2. KASUS TUNAI (CASH)
+                // 2. Jika Tunai
                 else if (paymentChoice === 'cash') {
                     alert('✅ Transaksi BERHASIL! \nPembayaran TUNAI diterima.');
-                    router.visit(route('transactions.index'));
+                    setCart([]); reset();
                 }
-
-                // 3. KASUS BAYAR NANTI (LATER)
+                // 3. Jika Nanti
                 else {
                     alert('📦 Transaksi Disimpan (Belum Bayar).');
-                    router.visit(route('transactions.index'));
+                    setCart([]); reset();
                 }
             },
             onError: (errors) => {
